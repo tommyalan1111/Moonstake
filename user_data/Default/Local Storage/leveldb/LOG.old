@@ -1,3 +1,5 @@
-2026/09/24-18:03:09.416 b1cd9b2 Reusing MANIFEST /Users/Amuro/Desktop/Work/Moonstake/Moonstake/user_data/Default/Local Storage/leveldb/MANIFEST-000001
-2026/09/24-18:03:09.418 b1cd9b2 Recovering log #79
-2026/09/24-18:03:09.418 b1cd9b2 Reusing old log /Users/Amuro/Desktop/Work/Moonstake/Moonstake/user_data/Default/Local Storage/leveldb/000079.log 
+2026/09/24-18:42:10.700 b1d6cab Reusing MANIFEST /Users/Amuro/Desktop/Work/Moonstake/Moonstake/user_data/Default/Local Storage/leveldb/MANIFEST-000001
+2026/09/24-18:42:10.701 b1d6cab Recovering log #79
+2026/09/24-18:42:10.702 b1d6cab Reusing old log /Users/Amuro/Desktop/Work/Moonstake/Moonstake/user_data/Default/Local Storage/leveldb/000079.log 
+2026/09/24-18:42:22.262 b1d6cab Level-0 table #84: started
+2026/09/24-18:42:22.267 b1d6cab Level-0 table #84: 27795 bytes OK

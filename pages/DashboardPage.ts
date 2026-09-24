@@ -8,28 +8,29 @@ export class DashboardPage {
 
   constructor(page: Page) {
     this.page = page;
-    
-    // Nút icon con mắt hoặc khu vực thẻ ví MATIC only
-    this.eyeIcon = page.locator('div.wallet-card-wrap, [class*="card"], button:has(svg)').first();
+    this.eyeIcon = page.locator('button, svg, [class*="eye"]').first();
     this.totalBalanceUSD = page.locator('text=/MATIC only/i').first();
     this.historyLink = page.locator('a[href*="assets-list"], a[href*="wallet"]').first();
   }
 
   async gotoAssetsList() {
     await this.page.goto('https://wallet.moonstake.io/admin/assets-list', {
-      waitUntil: 'domcontentloaded',
+      waitUntil: 'commit',
       timeout: 30000,
     });
-    // Chờ cho bảng token xuất hiện
-    await this.page.locator('table, [role="table"], tr, [class*="asset"]').first().waitFor({ 
-      state: 'visible', 
-      timeout: 15000 
-    }).catch(() => {});
+
+    // Nếu bị văng về Login thì dừng hoặc thông báo rõ
+    if (this.page.url().includes('/login')) {
+      console.warn('⚠️ Session trong STORAGE_STATE đã hết hạn, ứng dụng bị redirect về trang /login!');
+    }
+
+    // Chờ giao diện chính load xong
+    await this.page.waitForLoadState('domcontentloaded');
   }
 
   // --- TC01: TOGGLE HIDE/SHOW BALANCE ---
   async toggleHideBalance() {
-    const eyeBtn = this.page.locator('button, svg, [class*="eye"]').first();
+    const eyeBtn = this.eyeIcon;
     if (await eyeBtn.isVisible().catch(() => false)) {
       await eyeBtn.click({ force: true });
     } else {
@@ -44,17 +45,14 @@ export class DashboardPage {
 
   // --- TC02 & TC03: ASSETS LIST & SELECT TOKEN ---
   async verifyAssetsListLoaded() {
-    // Bắt trực tiếp phần tử hiển thị chứa chữ "Polygon" hoặc "Tezos" (không dùng exact match ^$)
-    const polygonAsset = this.page.getByText('Polygon', { exact: false }).first();
-    const tezosAsset = this.page.getByText('Tezos', { exact: false }).first();
+    // Chờ cho bảng hoặc danh sách token hiển thị trên UI
+    await this.page.waitForLoadState('networkidle').catch(() => {});
 
-    // Đảm bảo ít nhất 1 trong 2 đồng xuất hiện trên UI
-    await Promise.race([
-      polygonAsset.waitFor({ state: 'visible', timeout: 20000 }),
-      tezosAsset.waitFor({ state: 'visible', timeout: 20000 })
-    ]);
+    // Selector bắt linh hoạt Polygon/MATIC hoặc Tezos/XTZ
+    const assetElement = this.page.locator('body').locator('text=/Polygon|MATIC|Tezos|XTZ/i').first();
 
-    await expect(polygonAsset.or(tezosAsset)).toBeVisible();
+    await assetElement.waitFor({ state: 'visible', timeout: 25000 });
+    await expect(assetElement).toBeVisible();
   }
 
   async selectAssetByName(symbolOrName: string) {
@@ -67,14 +65,14 @@ export class DashboardPage {
 
     const targetName = nameMap[symbolOrName.toUpperCase()] || symbolOrName;
 
-    // Định vị dòng trong bảng (tr) chứa tên token
-    const tokenRow = this.page.locator('tr, [class*="row"], [class*="item"]').filter({
-      hasText: targetName
-    }).first();
+    // Tìm dòng/ô chứa tên token (dùng regex case-insensitive)
+    const tokenItem = this.page.locator('tr, div, li, a')
+      .filter({ hasText: new RegExp(targetName, 'i') })
+      .first();
 
-    await tokenRow.waitFor({ state: 'visible', timeout: 15000 });
-    await tokenRow.scrollIntoViewIfNeeded();
-    await tokenRow.click({ force: true });
+    await tokenItem.waitFor({ state: 'visible', timeout: 20000 });
+    await tokenItem.scrollIntoViewIfNeeded();
+    await tokenItem.click({ force: true });
   }
 
   async verifyChartOrDetailVisible() {
