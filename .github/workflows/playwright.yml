@@ -4,21 +4,35 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+
 jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+
     - uses: actions/setup-node@v4
       with:
-        node-version: lts/*
+        node-version: 20
+
     - name: Install dependencies
       run: npm ci
+
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
+
+    # 🔑 BƯỚC BỔ SUNG: Tạo thư mục và khôi phục file state.json từ GitHub Secret
+    - name: Restore Auth State from Secret
+      run: |
+        mkdir -p ./user_data
+        echo "${{ secrets.STORAGE_STATE }}" | base64 --decode > ./user_data/state.json
+
     - name: Run Playwright tests
       run: npx playwright test
+      env:
+        CI: true
+
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
