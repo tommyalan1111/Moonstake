@@ -1,8 +1,12 @@
-
-# Playwright
+# Node modules
 node_modules/
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
-/playwright/.auth/
+
+# Test results & screenshots
+test-results/
+
+# Chứa thông tin đăng nhập/session cá nhân (Bảo mật)
+user_data/
+*.pem
+
+# (Tùy chọn) Bỏ comment dòng dưới nếu BẠN KHÔNG MUỐN push trực tiếp report HTML nặng lên git
+# playwright-report/

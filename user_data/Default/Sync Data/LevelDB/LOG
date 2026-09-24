@@ -1,3 +1,3 @@
-2026/09/24-10:26:18.564 60a8 Reusing MANIFEST E:\Work\MoonstakeTest\user_data\Default\Sync Data\LevelDB/MANIFEST-000001
-2026/09/24-10:26:18.565 60a8 Recovering log #3
-2026/09/24-10:26:18.565 60a8 Reusing old log E:\Work\MoonstakeTest\user_data\Default\Sync Data\LevelDB/000003.log 
+2026/09/24-18:05:54.613 b1ce881 Reusing MANIFEST /Users/Amuro/Desktop/Work/Moonstake/Moonstake/user_data/Default/Sync Data/LevelDB/MANIFEST-000001
+2026/09/24-18:05:54.613 b1ce881 Recovering log #3
+2026/09/24-18:05:54.614 b1ce881 Reusing old log /Users/Amuro/Desktop/Work/Moonstake/Moonstake/user_data/Default/Sync Data/LevelDB/000003.log 
