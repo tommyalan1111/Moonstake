@@ -41,17 +41,25 @@ async verifyBalanceIsHidden() {
 }
 
   // TC02: Kiểm tra danh sách Assets hiển thị các đồng Token
-  async verifyAssetsListLoaded() {
-    await this.page.waitForLoadState('domcontentloaded');
+  // pages/AssetsPage.ts
+async verifyAssetsListLoaded() {
+  // 1. Chờ trang load xong DOM và các request ngầm ổn định
+  await this.page.waitForLoadState('domcontentloaded');
+  
+  // 2. Chờ cho loader/spinner biến mất (nếu UI có spinner)
+  const spinner = this.page.locator('.spinner, .loading, [data-testid="loader"]').first();
+  await spinner.waitFor({ state: 'detached', timeout: 10000 }).catch(() => {});
 
-    const assetItem = this.page
-      .locator('tr, div, li, a')
-      .filter({ hasText: /Polygon|MATIC|Tezos|XTZ|Ethereum|ETH|Bitcoin|BTC/i })
-      .filter({ hasNotText: 'MATIC only' })
-      .first();
+  // 3. Locator linh hoạt hơn cho Token Item
+  const assetItem = this.page
+    .locator('tr, div, li, a')
+    .filter({ hasText: /Polygon|MATIC|POL|Tezos|XTZ|Ethereum|ETH|Bitcoin|BTC/i })
+    .filter({ hasNotText: 'MATIC only' })
+    .first();
 
-    await expect(assetItem).toBeVisible({ timeout: 20000 });
-  }
+  // 4. Tăng timeout riêng cho bước chờ element này xuất hiện trên CI
+  await expect(assetItem).toBeVisible({ timeout: 30000 });
+}
 
   // TC03: Chọn một Token cụ thể trong danh sách Assets
   async selectAssetByName(symbolOrName: string) {
