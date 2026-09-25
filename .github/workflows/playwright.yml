@@ -3,14 +3,14 @@ name: Playwright Tests
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch: # Cho phép bấm chạy thủ công trên GitHub UI
+  workflow_dispatch:
 
 jobs:
   test:
-    # Chạy trên Self-Hosted Runner vừa cài đặt
     runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash # Bỏ qua rào cản ExecutionPolicy của PowerShell trên Windows
 
     steps:
     - name: Checkout Code
