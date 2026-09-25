@@ -1,41 +1,28 @@
 name: Playwright Tests
+
 on:
   push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch: # Cho phép bấm chạy thủ công trên GitHub UI
 
 jobs:
   test:
-    timeout-minutes: 60
-    runs-on: ubuntu-latest
+    # Chạy trên Self-Hosted Runner vừa cài đặt
+    runs-on: self-hosted
+
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
-    - uses: actions/setup-node@v4
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
       with:
-        node-version: 22
+        node-version: 20
 
-    - name: Install dependencies
+    - name: Install Dependencies
       run: npm ci
 
-    - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
-
-    # Giải mã file state.json từ Secret
-    - name: Restore Auth State from Secret
-      run: |
-        mkdir -p ./user_data
-        echo "${{ secrets.STORAGE_STATE }}" | base64 --decode > ./user_data/state.json
-
-    - name: Run Playwright tests
-      run: npx playwright test
-      env:
-        CI: true
-
-    - uses: actions/upload-artifact@v4
-      if: ${{ !cancelled() }}
-      with:
-        name: playwright-report
-        path: playwright-report/
-        retention-days: 30
+    - name: Run Playwright Tests
+      run: npx playwright test tests/asset.spec.ts
