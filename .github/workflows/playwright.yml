@@ -22,6 +22,13 @@ jobs:
       shell: cmd
       run: npm install
 
+    # Copy session state.json từ đường dẫn cố định trên máy local vào thư mục làm việc của Runner
+    - name: Copy Local Storage State
+      shell: cmd
+      run: |
+        if not exist "user_data" mkdir user_data
+        copy "D:\Work\Moonstake\user_data\state.json" "user_data\state.json"
+
     - name: Run Playwright Tests
       shell: cmd
       run: npx playwright test tests/asset.spec.ts
