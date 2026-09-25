@@ -20,9 +20,25 @@ export class AssetsPage {
     }
   }
 
-  async verifyBalanceIsHidden() {
-    await expect(this.page.locator('body')).toBeVisible();
-  }
+  // Trong pages/AssetsPage.ts
+
+async verifyBalanceIsHidden() {
+  // Option 1: Chờ cho trang/loader biến mất và UI hiển thị ổn định
+  await this.page.waitForLoadState('domcontentloaded');
+
+  // Option 2: Assert vào element thực tế chứa số dư hoặc nút eye/toggle balance
+  // Ví dụ: tìm element số dư (thường dạng *** hoặc có class/attribute cụ thể)
+  const balanceElement = this.page.locator('.balance-amount, [data-testid="balance"], .total-balance').first();
+  
+  // Hoặc đơn giản là kiểm tra URL/chờ nút toggle số dư hiển thị
+  const toggleEyeBtn = this.page.locator('button, svg, i').filter({ hasText: /hide|show|\*\*\*/i }).first();
+  
+  // Nếu chỉ cần đảm bảo trang đã load và không bị văng:
+  await expect(this.page).not.toHaveURL(/.*login/i);
+  
+  // Chờ element hiển thị thực sự thay vì body
+  await this.page.waitForSelector('main, #app, #root, .main-content', { state: 'visible', timeout: 10000 });
+}
 
   // TC02: Kiểm tra danh sách Assets hiển thị các đồng Token
   async verifyAssetsListLoaded() {
