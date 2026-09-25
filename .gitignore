@@ -1,12 +1,15 @@
-# Node modules
+# Dependencies
 node_modules/
 
-# Test results & screenshots
+# Test results & Reports
 test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 
-# Chứa thông tin đăng nhập/session cá nhân (Bảo mật)
+# User Data & Sensitive Sessions (Bắt buộc ẩn)
 user_data/
-*.pem
+.chrome-profile/
 
-# (Tùy chọn) Bỏ comment dòng dưới nếu BẠN KHÔNG MUỐN push trực tiếp report HTML nặng lên git
-# playwright-report/
+# Environment variables
+.env

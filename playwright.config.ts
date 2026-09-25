@@ -1,29 +1,12 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
+  testDir: './tests',
   globalSetup: require.resolve('./tests/global-setup'),
-
-  // Cấu hình reporter xuất HTML report
-  reporter: [
-    ['line'], 
-    ['html', { outputFolder: 'playwright-report', open: 'never' }]
-  ],
-
   use: {
+    // Đọc trạng thái đăng nhập từ file state.json đã dán
     storageState: './user_data/state.json',
-    headless: true,
-    viewport: { width: 1280, height: 720 },
-    ignoreHTTPSErrors: true,
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
+    headless: false, // Chạy hiển thị trình duyệt ở local để dễ quan sát
+    baseURL: 'https://wallet.moonstake.io',
   },
-  projects: [
-    {
-      name: 'chromium',
-      use: { 
-        ...devices['Desktop Chrome'],
-        storageState: './user_data/state.json',
-      },
-    },
-  ],
 });
