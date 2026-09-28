@@ -26,20 +26,21 @@ jobs:
     - name: Ensure user_data and Copy State
       shell: powershell
       run: |
-        # 1. Tạo thư mục user_data nếu chưa có
+        # 1. Tạo thư mục user_data trong thư mục làm việc của Runner
         if (-not (Test-Path -Path "user_data")) {
             New-Item -ItemType Directory -Path "user_data" -Force
         }
 
-        # 2. Tìm file state.json từ thư mục project local trên máy (tìm ở các ổ đĩa/thư mục tương đương)
+        # 2. Danh sách các đường dẫn chứa state.json local
         $possiblePaths = @(
             "E:\Work\Moonstake\user_data\state.json",
             "D:\Work\Moonstake\user_data\state.json",
-            "$HOME/Work/Moonstake/user_data/state.json"
+            "$HOME\Work\Moonstake\user_data\state.json"
         )
 
         $found = $false
         foreach ($path in $possiblePaths) {
+            Write-Host "Checking path: $path"
             if (Test-Path -Path $path) {
                 Copy-Item -Path $path -Destination "user_data\state.json" -Force
                 Write-Host "Successfully copied state.json from $path"
@@ -49,9 +50,12 @@ jobs:
         }
 
         if (-not $found) {
-            Write-Warning "Could not find local state.json in predefined paths. Test might run unauthenticated."
+            Write-Error "CRITICAL: state.json was not found in any local path! Please place state.json at E:\Work\Moonstake\user_data\state.json"
+            exit 1
         }
 
     - name: Run Playwright Tests
       shell: cmd
       run: npx playwright test tests/asset.spec.ts
+
+      
