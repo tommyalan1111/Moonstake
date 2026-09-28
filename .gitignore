@@ -16,3 +16,7 @@ user_data/
 
 .DS_Store
 **/.DS_Store
+
+# File report dưới local
+playwright-report/
+test-results/
