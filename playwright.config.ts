@@ -1,3 +1,10 @@
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Tải biến môi trường từ file .env
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
