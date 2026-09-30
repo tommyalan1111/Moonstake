@@ -1,37 +1,45 @@
+import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Tải biến môi trường từ file .env
+/**
+ * Đọc biến môi trường từ file .env
+ */
 dotenv.config({ path: path.resolve(__dirname, '.env') });
-
-
-import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  
-  /* Bổ sung Reporter: Xuất HTML Report chi tiết và hiển thị kết quả ra Terminal */
-  reporter: [
-    ['list'], // Hiển thị tiến trình test ngay trong Terminal
-    ['html', { outputFolder: 'playwright-report', open: 'never' }] // Xuất HTML report đầy đủ
-  ],
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
+  reporter: 'html',
 
   use: {
-    viewport: { width: 1920, height: 1080 },
-    storageState: './user_data/state.json',
-    
-    /* Chạy Headless tự động dựa trên môi trường CI (CI=true trên GitHub Actions, false ở Local) */
-    headless: process.env.CI ? true : false,
-    
-    baseURL: 'https://wallet.moonstake.io',
-    channel: 'chrome', // Dùng Chrome thật để tránh bị Cloudflare chặn
-    
-    launchOptions: {
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-      ],
-    },
+    /* Lấy BASE_URL trực tiếp từ biến môi trường */
+    baseURL: process.env.BASE_URL || 'http://localhost:3000',
+
+    /* Ghi hình & chụp ảnh khi test fail */
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
   },
+
+  projects: [
+    // 1. Setup project: Chạy đăng nhập trước để tạo storageState
+    {
+      name: 'setup',
+      testMatch: /.*\.setup\.ts/,
+    },
+
+    // 2. Project chính: Sử dụng kết quả đăng nhập từ bước setup
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        // Tự động load file session đã lưu
+        storageState: 'playwright/.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },
+  ],
 });

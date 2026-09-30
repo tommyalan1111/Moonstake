@@ -73,29 +73,31 @@ test.describe('On-Chain Balance Integrity Verification', () => {
   for (const asset of ASSETS_TO_VERIFY) {
     test(`Verify balance for ${asset.symbol} (${asset.type})`, async ({ page, request }) => {      
       
-      // -------------------------------------------------------------
-      // BƯỚC 1: Chuyển Tab (Coins / Tokens)
-      // -------------------------------------------------------------
-      const tabElement = page
-        .getByRole('tab', { name: new RegExp(asset.tabName, 'i') })
-        .or(page.locator('[role="tab"], div, button, a, li').filter({ hasText: new RegExp(`^\\s*${asset.tabName}`, 'i') }))
-        .first();
+ // -------------------------------------------------------------
+        // BƯỚC 1: Đảm bảo trang đã hết Loading & Chuyển Tab (Coins / Tokens)
+        // -------------------------------------------------------------
+        // Đợi overlay "Loading..." biến mất hoàn toàn
+        await page.locator('text=Loading...').waitFor({ state: 'detached', timeout: 30000 }).catch(() => {});
 
-      if (await tabElement.isVisible()) {
-        await tabElement.click({ force: true });
-        await page.waitForTimeout(2000);
-      }
+        const tabElement = page
+          .getByRole('tab', { name: new RegExp(asset.tabName, 'i') })
+          .or(page.locator('[role="tab"], div, button, a, li').filter({ hasText: new RegExp(`^\\s*${asset.tabName}`, 'i') }))
+          .first();
 
-      // -------------------------------------------------------------
-      // BƯỚC 2: Lấy số dư hiển thị trên UI Moonstake
-      // -------------------------------------------------------------
-      const uiBalanceElement = page
-        .locator('div.balance')
-        .filter({ hasText: asset.symbol })
-        .first();
+        if (await tabElement.isVisible()) {
+          await tabElement.click();
+        }
 
-      // Tăng timeout lên 30s để đảm bảo Moonstake nạp xong dữ liệu on-chain cho toàn bộ coin
-      await uiBalanceElement.waitFor({ state: 'attached', timeout: 30000 });
+        // -------------------------------------------------------------
+        // BƯỚC 2: Lấy số dư hiển thị trên UI Moonstake (Playwright Best Practice)
+        // -------------------------------------------------------------
+        const uiBalanceElement = page
+          .locator('div.balance')
+          .filter({ hasText: asset.symbol })
+          .first();
+
+        // Sử dụng web-first assertion tự động retry cho đến khi phần tử xuất hiện thực sự trên UI
+        await expect(uiBalanceElement).toBeVisible({ timeout: 30000 });
 
       const uiBalanceText = await uiBalanceElement.innerText();
       // Trích xuất chính xác số lượng coin đứng trước symbol (tránh bị lẫn số tiền USD bên dưới)
@@ -158,24 +160,53 @@ test.describe('On-Chain Balance Integrity Verification', () => {
           throw new Error(`[TzKT API Error] Status: ${response.status()}, Body: ${await response.text()}`);
         }
       } else if (asset.type === 'AVAX') {
-        const rpcUrl = asset.rpcUrl || 'https://api.avax.network/ext/bc/C/rpc';
-        const response = await request.post(rpcUrl, {
-          data: {
-            jsonrpc: '2.0',
-            method: 'eth_getBalance',
-            params: [evmAddress, 'latest'],
-            id: 1,
-          },
-          headers: { 'Content-Type': 'application/json' },
-        });
+  // Danh sách các Public RPC ổn định của Avalanche C-Chain
+  const avaxRpcList = [
+    asset.rpcUrl || 'https://api.avax.network/ext/bc/C/rpc',
+    'https://avalanche.drpc.org',
+    'https://1rpc.io/avax/c',
+    'https://rpc.ankr.com/avalanche',
+  ];
+
+  let success = false;
+
+  for (const rpcUrl of avaxRpcList) {
+    try {
+      const response = await request.post(rpcUrl, {
+        data: {
+          jsonrpc: '2.0',
+          method: 'eth_getBalance',
+          params: [evmAddress, 'latest'],
+          id: 1,
+        },
+        headers: {
+          'Content-Type': 'application/json',
+          // Thêm User-Agent để tránh bị Cloudflare/WAF block request từ script
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        timeout: 10000, // Timeout 10s cho mỗi RPC
+      });
+
+      // Kiểm tra xem response có phải JSON hợp lệ hay không trước khi parse
+      const contentType = response.headers()['content-type'] || '';
+      if (response.ok() && contentType.includes('application/json')) {
         const data = await response.json();
         if (data.result) {
           const rawBalance = BigInt(data.result);
           onChainBalance = Number(rawBalance) / Math.pow(10, asset.decimals);
-        } else {
-          throw new Error(`[Avalanche RPC Error]: ${JSON.stringify(data)}`);
+          success = true;
+          break; // Thành công thì thoát vòng lặp
         }
       }
+    } catch (error) {
+      console.warn(`[AVAX RPC Warning] RPC ${rpcUrl} thất bại, thử endpoint tiếp theo...`);
+    }
+  }
+
+  if (!success) {
+    throw new Error(`[Avalanche RPC Error]: Tất cả các RPC endpoints đều không phản hồi JSON hợp lệ.`);
+  }
+}
 
       console.log(`[On-Chain] ${asset.symbol} Balance: ${onChainBalance}`);
 

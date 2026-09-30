@@ -1,64 +1,39 @@
-import { chromium } from '@playwright/test';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as readline from 'readline';
+// tests/auth.setup.ts
+import { test as setup, expect } from '@playwright/test';
+import fs from 'fs';
 
-const askQuestion = (query: string) => {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  return new Promise((resolve) =>
-    rl.question(query, (ans) => {
-      rl.close();
-      resolve(ans);
-    })
-  );
-};
+const authFile = 'playwright/.auth/user.json';
 
-(async () => {
-  console.log('🌐 Đang mở Chrome với cấu hình Stealth để bypass Cloudflare...');
+setup('authenticate', async ({ page }) => {
+  // 1. Kiểm tra nếu state cũ vẫn dùng được thì bỏ qua đăng nhập lại
+  if (fs.existsSync(authFile)) {
+    await page.context().addCookies(JSON.parse(fs.readFileSync(authFile, 'utf-8')).cookies || []);
+    await page.goto('/admin/assets-list');
 
-  const userDataDir = path.join(process.cwd(), 'user_data');
-  if (!fs.existsSync(userDataDir)) {
-    fs.mkdirSync(userDataDir, { recursive: true });
+    if (!page.url().includes('/sign-in')) {
+      console.log('✅ Session state.json vẫn còn hiệu lực.');
+      return;
+    }
+    console.log('⚠️ Session hết hạn, tiến hành đăng nhập lại...');
   }
 
-  const context = await chromium.launchPersistentContext(path.join(userDataDir, 'chrome-profile'), {
-    headless: false,
-    channel: 'chrome',
-    viewport: null,
-    args: [
-      '--start-maximized',
-      '--disable-blink-features=AutomationControlled',
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-    ],
-    ignoreDefaultArgs: ['--enable-automation'],
-  });
+  // 2. Sử dụng thông tin đăng nhập từ file .env
+  const email = process.env.ADMIN_EMAIL;
+  const password = process.env.ADMIN_PASSWORD;
 
-  const page = context.pages().length > 0 ? context.pages()[0] : await context.newPage();
+  if (!email || !password) {
+    throw new Error('❌ Thiếu ADMIN_EMAIL hoặc ADMIN_PASSWORD trong file .env!');
+  }
 
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-  });
+  await page.goto('/sign-in');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: /sign in/i }).click();
 
-  await page.goto('https://wallet.moonstake.io/admin/assets-list');
+  // Chờ chuyển hướng thành công
+  await page.waitForURL('**/admin/**');
 
-  console.log('\n==================================================');
-  console.log('👉 Vui lòng ĐĂNG NHẬP và tích chọn Cloudflare Turnstile.');
-  console.log('👉 Đợi trang load hoàn tất danh sách Assets.');
-  console.log('👉 Quay lại Terminal này và nhấn phím [ENTER] để lưu session!');
-  console.log('==================================================\n');
-
-  await askQuestion('Thao tác xong thì nhấn ENTER tại đây để tiếp tục... ');
-
-  // Chờ 2 giây đảm bảo dữ liệu ghi xong
-  await page.waitForTimeout(2000);
-
-  console.log('⏳ Đang xuất Cookies & LocalStorage ra user_data/state.json...');
-  await context.storageState({ path: path.join(userDataDir, 'state.json') });
-
-  console.log('🎉 Đã lưu state.json thành công!');
-  await context.close();
-})();
+  // Lưu lại state mới
+  await page.context().storageState({ path: authFile });
+  console.log('🎉 Đã cập nhật state.json mới thành công!');
+});
