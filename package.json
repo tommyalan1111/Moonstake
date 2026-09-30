@@ -1,13 +1,20 @@
 {
-  "name": "moonstaketest",
+  "name": "moonstake-automation",
   "version": "1.0.0",
-  "description": "",
+  "description": "Moonstake dApp Automation Testing Suite",
   "main": "index.js",
-  "scripts": {},
+  "type": "commonjs",
+  "scripts": {
+    "auth": "npx tsx scripts/auth-setup.ts",
+    "test:asset": "npx playwright test tests/asset.spec.ts --headed",
+    "test:balance": "npx playwright test tests/balance-onchain.spec.ts --headed",
+    "test:all": "npx playwright test --project=chromium",
+    "test:headed": "npx playwright test --project=chromium --headed",
+    "report": "npx playwright show-report"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@types/node": "^26.6.2",

@@ -1,39 +1,78 @@
-// tests/auth.setup.ts
-import { test as setup, expect } from '@playwright/test';
+import { chromium } from '@playwright/test';
+import path from 'path';
 import fs from 'fs';
+import readline from 'readline';
 
-const authFile = 'playwright/.auth/user.json';
+const userDataDir = path.join(__dirname, '../.chrome-user-data');
+const authDir = path.join(__dirname, '../playwright/.auth');
+const authFile = path.join(authDir, 'user.json');
 
-setup('authenticate', async ({ page }) => {
-  // 1. Kiểm tra nếu state cũ vẫn dùng được thì bỏ qua đăng nhập lại
-  if (fs.existsSync(authFile)) {
-    await page.context().addCookies(JSON.parse(fs.readFileSync(authFile, 'utf-8')).cookies || []);
-    await page.goto('/admin/assets-list');
+// Hàm tạo giao diện lắng nghe phím Enter từ Terminal
+function askQuestion(query: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise((resolve) =>
+    rl.question(query, (ans) => {
+      rl.close();
+      resolve(ans);
+    })
+  );
+}
 
-    if (!page.url().includes('/sign-in')) {
-      console.log('✅ Session state.json vẫn còn hiệu lực.');
-      return;
-    }
-    console.log('⚠️ Session hết hạn, tiến hành đăng nhập lại...');
+async function runAuthSetup() {
+  console.log('🚀 Đang khởi chạy Google Chrome thực tế để tạo Session...');
+
+  if (!fs.existsSync(authDir)) {
+    fs.mkdirSync(authDir, { recursive: true });
   }
 
-  // 2. Sử dụng thông tin đăng nhập từ file .env
-  const email = process.env.ADMIN_EMAIL;
-  const password = process.env.ADMIN_PASSWORD;
+  // Khởi chạy Chrome thật với Persistent Profile
+  const context = await chromium.launchPersistentContext(userDataDir, {
+    headless: false,
+    channel: 'chrome',
+    viewport: { width: 1440, height: 900 },
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--no-sandbox',
+    ],
+  });
 
-  if (!email || !password) {
-    throw new Error('❌ Thiếu ADMIN_EMAIL hoặc ADMIN_PASSWORD trong file .env!');
-  }
+  const page = context.pages()[0] || (await context.newPage());
 
-  await page.goto('/sign-in');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /sign in/i }).click();
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => undefined,
+    });
+  });
 
-  // Chờ chuyển hướng thành công
-  await page.waitForURL('**/admin/**');
+  const targetUrl = process.env.BASE_URL || 'https://wallet.moonstake.io/admin/assets-list/';
+  console.log(`🌐 Truy cập: ${targetUrl}`);
+  await page.goto(targetUrl);
 
-  // Lưu lại state mới
-  await page.context().storageState({ path: authFile });
-  console.log('🎉 Đã cập nhật state.json mới thành công!');
+  console.log('\n======================================================');
+  console.log('👉 VUI LÒNG THAO TÁC TRÊN CHROME:');
+  console.log('1. Giải quyết Cloudflare Turnstile (nếu có).');
+  console.log('2. Nhập Username & Password để Đăng nhập.');
+  console.log('3. Đảm bảo đã vào được trang Dashboard (/admin/assets-list).');
+  console.log('======================================================\n');
+
+  // 💡 GIẢI PHÁP: Treo Terminal cho đến khi bạn nhấn ENTER
+  await askQuestion('⌨️  Sau khi đã ĐĂNG NHẬP THÀNH CÔNG trên Chrome, hãy quay lại đây và nhấn [ENTER] để lưu Session...');
+
+  console.log('⏳ Đang trích xuất và lưu session state...');
+  await page.waitForTimeout(2000);
+
+  // Lưu Session State ra file user.json
+  await context.storageState({ path: authFile });
+  console.log(`🎉 ĐÃ LƯU SESSION THÀNH CÔNG VÀO: ${authFile}`);
+
+  await context.close();
+  process.exit(0);
+}
+
+runAuthSetup().catch((err) => {
+  console.error('❌ Lỗi Auth Setup:', err);
+  process.exit(1);
 });

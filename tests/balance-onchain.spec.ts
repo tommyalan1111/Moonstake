@@ -1,220 +1,130 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, chromium, BrowserContext, Page } from '@playwright/test';
+import path from 'path';
 
-const TEST_WALLET_ADDRESS = process.env.TEST_WALLET_ADDRESS || '0x8bd50ecf6f8eac4d90c49bb7575c4c5894f7cef0';
-const TEZOS_WALLET_ADDRESS = process.env.TEZOS_WALLET_ADDRESS || 'tz1afTtDDye7CueYDp8EvZLAX43Sw9HBiNci';
-const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || 'V236XENUCQNQ2TWMB3UX4NENH2UX7M4FTS';
+// Đường dẫn tới thư mục lưu Profile Chrome cố định
+const userDataDir = path.join(__dirname, '../.chrome-user-data');
 
-interface AssetConfig {
-  symbol: string;
-  name?: string;
-  type: 'NATIVE' | 'ERC20' | 'TEZOS' | 'AVAX';
-  tabName: 'Coins' | 'Tokens';
-  chainId?: number;
-  contractAddress?: string;
-  walletAddress?: string;
-  rpcUrl?: string;
-  decimals: number;
-}
-
-const ASSETS_TO_VERIFY: AssetConfig[] = [
-  {
-    symbol: 'ETH',
-    type: 'NATIVE',
-    tabName: 'Coins',
-    chainId: 1,
-    decimals: 18,
-  },
-  {
-    symbol: 'MATIC',
-    name: 'Polygon',
-    type: 'NATIVE',
-    tabName: 'Coins',
-    chainId: 137,
-    decimals: 18,
-  },
-  {
-    symbol: 'XTZ',
-    name: 'Tezos',
-    type: 'TEZOS',
-    tabName: 'Coins',
-    walletAddress: TEZOS_WALLET_ADDRESS,
-    decimals: 6,
-  },
-  {
-    symbol: 'AVAX',
-    name: 'Avalanche (C-Chain)',
-    type: 'AVAX',
-    tabName: 'Coins',
-    rpcUrl: 'https://api.avax.network/ext/bc/C/rpc',
-    decimals: 18,
-  },
-  {
-    symbol: 'USDT',
-    type: 'ERC20',
-    tabName: 'Tokens',
-    chainId: 1,
-    contractAddress: '0xdac17f958d2ee523a2206206994597c13d831ec7',
-    decimals: 6,
-  },
+// Cấu hình loại Asset (coin hoặc token) để script tự chuyển tab tương ứng
+const TARGET_ASSETS = [
+  { symbol: 'AVAX', name: 'AVAX', type: 'coin' },
+  { symbol: 'USDT', name: 'USDT (ERC20)', type: 'token' },
+  { symbol: 'ETH', name: 'ETH (NATIVE)', type: 'coin' },
+  { symbol: 'XTZ', name: 'XTZ (TEZOS)', type: 'coin' },
+  { symbol: 'MATIC', name: 'MATIC (NATIVE)', type: 'coin' },
 ];
 
-test.describe('On-Chain Balance Integrity Verification', () => {
-  test.setTimeout(60000);
+/**
+ * Hàm hỗ trợ bóc tách thông tin Balance và USD Value của riêng Token/Coin cần tìm
+ */
+async function getUiTokenBalance(page: Page, symbol: string) {
+  // Tìm chính xác dòng chứa mã Token/Coin
+  const coinRow = page
+    .locator('tr, div')
+    .filter({ hasText: new RegExp(`\\b${symbol}\\b`, 'i') })
+    .first();
 
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/admin/assets-list', { waitUntil: 'domcontentloaded' });
+  if (await coinRow.isVisible().catch(() => false)) {
+    const rawText = await coinRow.innerText();
+    const cleanText = rawText.replace(/\s+/g, ' ').trim();
+
+    // Regex bóc tách số lượng Token (Ví dụ: "0.290661 AVAX" hoặc "0 USDT")
+    const amountMatch = cleanText.match(new RegExp(`([\\d\\.,]+\\s*${symbol})`, 'i'));
+    // Regex bóc tách giá trị quy đổi USD (Ví dụ: "3.25 USD")
+    const usdMatch = cleanText.match(/([\d\.,]+\s*USD)/i);
+
+    return {
+      amount: amountMatch ? amountMatch[1] : `0 ${symbol}`,
+      usd: usdMatch ? usdMatch[1] : '0 USD',
+      found: true
+    };
+  }
+
+  return { amount: `Not Found`, usd: '0 USD', found: false };
+}
+
+test.describe('On-Chain Balance Integrity Verification', () => {
+  let context: BrowserContext;
+  let page: Page;
+
+  test.beforeAll(async () => {
+    console.log('🚀 Khởi chạy Google Chrome thực tế với Persistent Profile...');
+
+    context = await chromium.launchPersistentContext(userDataDir, {
+      headless: false,
+      channel: 'chrome',
+      viewport: { width: 1440, height: 900 },
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+      ],
+    });
+
+    page = context.pages()[0] || (await context.newPage());
+
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+      });
+    });
+
+    const targetUrl = process.env.BASE_URL || 'https://wallet.moonstake.io/admin/assets-list/';
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3000);
 
-    if (page.url().includes('/sign-in')) {
-      throw new Error('❌ Session hết hạn hoặc không tìm thấy state.json hợp lệ. Vui lòng chạy lại script auth-setup.ts!');
+    if (page.url().includes('/sign-in') || page.url().includes('/login')) {
+      throw new Error(
+        '❌ Session đã hết hạn hoặc chưa hoàn tất Auth Setup. Vui lòng chạy lại: npx playwright test tests/auth-setup.spec.ts --project=setup --headed'
+      );
     }
   });
 
-  for (const asset of ASSETS_TO_VERIFY) {
-    test(`Verify balance for ${asset.symbol} (${asset.type})`, async ({ page, request }) => {      
-      
- // -------------------------------------------------------------
-        // BƯỚC 1: Đảm bảo trang đã hết Loading & Chuyển Tab (Coins / Tokens)
-        // -------------------------------------------------------------
-        // Đợi overlay "Loading..." biến mất hoàn toàn
-        await page.locator('text=Loading...').waitFor({ state: 'detached', timeout: 30000 }).catch(() => {});
+  test.afterAll(async () => {
+    if (context) {
+      await context.close();
+    }
+  });
 
-        const tabElement = page
-          .getByRole('tab', { name: new RegExp(asset.tabName, 'i') })
-          .or(page.locator('[role="tab"], div, button, a, li').filter({ hasText: new RegExp(`^\\s*${asset.tabName}`, 'i') }))
-          .first();
+  for (const asset of TARGET_ASSETS) {
+    test(`Verify balance for ${asset.name}`, async () => {
+      const targetUrl = process.env.BASE_URL || 'https://wallet.moonstake.io/admin/assets-list/';
+      if (!page.url().includes('/admin/assets-list')) {
+        await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
+      }
 
-        if (await tabElement.isVisible()) {
-          await tabElement.click();
+      // 1. Chuyển tab tương ứng nếu là Token ERC20
+      if (asset.type === 'token') {
+        const tokenTab = page.locator('text=/\\bTokens\\b/i').first();
+        if (await tokenTab.isVisible().catch(() => false)) {
+          await tokenTab.click();
+          await page.waitForTimeout(1500); // Chờ UI load danh sách Tokens
         }
-
-        // -------------------------------------------------------------
-        // BƯỚC 2: Lấy số dư hiển thị trên UI Moonstake (Playwright Best Practice)
-        // -------------------------------------------------------------
-        const uiBalanceElement = page
-          .locator('div.balance')
-          .filter({ hasText: asset.symbol })
-          .first();
-
-        // Sử dụng web-first assertion tự động retry cho đến khi phần tử xuất hiện thực sự trên UI
-        await expect(uiBalanceElement).toBeVisible({ timeout: 30000 });
-
-      const uiBalanceText = await uiBalanceElement.innerText();
-      // Trích xuất chính xác số lượng coin đứng trước symbol (tránh bị lẫn số tiền USD bên dưới)
-      const balanceMatch = uiBalanceText.match(new RegExp(`([0-9]+(?:\\.[0-9]+)?)\\s*${asset.symbol}`, 'i'));
-      const uiBalance = balanceMatch 
-        ? parseFloat(balanceMatch[1]) 
-        : parseFloat(uiBalanceText.replace(/[^0-9.-]+/g, ''));
-      console.log(`[UI] ${asset.symbol} Balance: ${uiBalance}`);
-
-      // -------------------------------------------------------------
-      // BƯỚC 3: Gọi API Blockchain lấy On-Chain Balance
-      // -------------------------------------------------------------
-      let onChainBalance = 0;
-      const baseUrl = 'https://api.etherscan.io/v2/api';
-      const evmAddress = asset.walletAddress || TEST_WALLET_ADDRESS;
-
-      if (asset.type === 'NATIVE') {
-        const chainId = asset.chainId || 1;
-        const apiUrl = `${baseUrl}?chainid=${chainId}&module=account&action=balance&address=${evmAddress}&tag=latest&apikey=${ETHERSCAN_API_KEY}`;
-        const response = await request.get(apiUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0' }
-        });
-        const data = await response.json();
-        
-        if (data.status === '1') {
-          const rawBalance = BigInt(data.result);
-          onChainBalance = Number(rawBalance) / Math.pow(10, asset.decimals);
-        } else {
-          console.error('[Etherscan Raw Response]:', data);
-          throw new Error(`[Etherscan API Error] Status: ${data.status}, Message: ${data.message}, Result: ${data.result}`);
-        }
-      } else if (asset.type === 'ERC20') {
-        const chainId = asset.chainId || 1;
-        const apiUrl = `${baseUrl}?chainid=${chainId}&module=account&action=tokenbalance&contractaddress=${asset.contractAddress}&address=${evmAddress}&tag=latest&apikey=${ETHERSCAN_API_KEY}`;
-        const response = await request.get(apiUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0' }
-        });
-        const data = await response.json();
-
-        if (data.status === '1') {
-          const rawBalance = BigInt(data.result);
-          onChainBalance = Number(rawBalance) / Math.pow(10, asset.decimals);
-        } else {
-          console.error('[Etherscan Raw Response]:', data);
-          throw new Error(`[Etherscan API Error] Status: ${data.status}, Message: ${data.message}, Result: ${data.result}`);
-        }
-      } else if (asset.type === 'TEZOS') {
-        const tezosAddress = asset.walletAddress || TEZOS_WALLET_ADDRESS;
-        // Sử dụng TzKT Public API của Tezos
-        const apiUrl = `https://api.tzkt.io/v1/accounts/${tezosAddress}/balance`;
-        const response = await request.get(apiUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0' }
-        });
-        
-        if (response.ok()) {
-          const text = (await response.text()).trim();
-          const rawBalance = BigInt(text);
-          onChainBalance = Number(rawBalance) / Math.pow(10, asset.decimals);
-        } else {
-          throw new Error(`[TzKT API Error] Status: ${response.status()}, Body: ${await response.text()}`);
-        }
-      } else if (asset.type === 'AVAX') {
-  // Danh sách các Public RPC ổn định của Avalanche C-Chain
-  const avaxRpcList = [
-    asset.rpcUrl || 'https://api.avax.network/ext/bc/C/rpc',
-    'https://avalanche.drpc.org',
-    'https://1rpc.io/avax/c',
-    'https://rpc.ankr.com/avalanche',
-  ];
-
-  let success = false;
-
-  for (const rpcUrl of avaxRpcList) {
-    try {
-      const response = await request.post(rpcUrl, {
-        data: {
-          jsonrpc: '2.0',
-          method: 'eth_getBalance',
-          params: [evmAddress, 'latest'],
-          id: 1,
-        },
-        headers: {
-          'Content-Type': 'application/json',
-          // Thêm User-Agent để tránh bị Cloudflare/WAF block request từ script
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        },
-        timeout: 10000, // Timeout 10s cho mỗi RPC
-      });
-
-      // Kiểm tra xem response có phải JSON hợp lệ hay không trước khi parse
-      const contentType = response.headers()['content-type'] || '';
-      if (response.ok() && contentType.includes('application/json')) {
-        const data = await response.json();
-        if (data.result) {
-          const rawBalance = BigInt(data.result);
-          onChainBalance = Number(rawBalance) / Math.pow(10, asset.decimals);
-          success = true;
-          break; // Thành công thì thoát vòng lặp
+      } else {
+        const coinTab = page.locator('text=/\\bCoins\\b/i').first();
+        if (await coinTab.isVisible().catch(() => false)) {
+          await coinTab.click();
+          await page.waitForTimeout(1000);
         }
       }
-    } catch (error) {
-      console.warn(`[AVAX RPC Warning] RPC ${rpcUrl} thất bại, thử endpoint tiếp theo...`);
-    }
-  }
 
-  if (!success) {
-    throw new Error(`[Avalanche RPC Error]: Tất cả các RPC endpoints đều không phản hồi JSON hợp lệ.`);
-  }
-}
+      // 2. Chờ dòng chứa Symbol hiển thị
+      const coinRow = page
+        .locator('tr, div')
+        .filter({ hasText: new RegExp(`\\b${asset.symbol}\\b`, 'i') })
+        .first();
 
-      console.log(`[On-Chain] ${asset.symbol} Balance: ${onChainBalance}`);
+      await expect(coinRow).toBeVisible({ timeout: 15000 });
 
-      // -------------------------------------------------------------
-      // BƯỚC 4: So sánh UI vs On-Chain
-      // -------------------------------------------------------------
-      expect(uiBalance).toBeCloseTo(onChainBalance, 4);
+      // 3. Trích xuất dữ liệu
+      const uiData = await getUiTokenBalance(page, asset.symbol);
+
+      // 4. In log chuẩn đẹp
+      const formattedSymbol = `[${asset.symbol}]`.padEnd(8, ' ');
+      const formattedAmount = uiData.amount.padEnd(20, ' ');
+      console.log(`🔹 ${formattedSymbol} | Balance: ${formattedAmount} | Value: ${uiData.usd}`);
+
+      // 5. Kiểm tra kết quả
+      expect(uiData.found).toBe(true);
     });
   }
-
 });

@@ -1,0 +1,21 @@
+2026/09/30-17:49:17.814 b66da35 Reusing MANIFEST /Users/Amuro/Desktop/Work/Moonstake/Moonstake/.chrome-user-data/Default/Local Storage/leveldb/MANIFEST-000001
+2026/09/30-17:49:17.815 b66da35 Recovering log #18
+2026/09/30-17:49:17.815 b66da35 Level-0 table #21: started
+2026/09/30-17:49:17.823 b66da35 Level-0 table #21: 44471 bytes OK
+2026/09/30-17:49:17.823 b66da35 Recovering log #20
+2026/09/30-17:49:17.823 b66da35 Reusing old log /Users/Amuro/Desktop/Work/Moonstake/Moonstake/.chrome-user-data/Default/Local Storage/leveldb/000020.log 
+2026/09/30-17:49:17.825 b66da35 Delete type=0 #18
+2026/09/30-17:49:17.826 b66da38 Compacting 4@0 + 1@1 files
+2026/09/30-17:49:17.830 b66da38 Generated table #22@0: 17 keys, 44961 bytes
+2026/09/30-17:49:17.830 b66da38 Compacted 4@0 + 1@1 files => 44961 bytes
+2026/09/30-17:49:17.831 b66da38 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/09/30-17:49:17.832 b66da38 Delete type=2 #15
+2026/09/30-17:49:17.832 b66da38 Delete type=2 #17
+2026/09/30-17:49:17.832 b66da38 Delete type=2 #13
+2026/09/30-17:49:17.832 b66da38 Delete type=2 #21
+2026/09/30-17:49:17.832 b66da38 Delete type=2 #19
+2026/09/30-17:49:27.853 b66da38 Level-0 table #24: started
+2026/09/30-17:49:27.855 b66da35 Current memtable full; waiting...
+2026/09/30-17:49:27.880 b66da38 Level-0 table #24: 44721 bytes OK
+2026/09/30-17:49:27.882 b66da38 Delete type=0 #20
+2026/09/30-17:49:27.883 b66da38 Level-0 table #26: started
