@@ -19,43 +19,59 @@ jobs:
         node-version: 20
 
     - name: Install Dependencies
-      shell: cmd
       run: npm install
 
-    # Khởi tạo thư mục user_data & Copy state.json linh hoạt theo môi trường Runner
+    # Khởi tạo thư mục user_data & Copy state.json linh hoạt theo môi trường Runner (macOS, Windows, Linux)
     - name: Ensure user_data and Copy State
-      shell: powershell
       run: |
-        # 1. Tạo thư mục user_data trong thư mục làm việc của Runner
-        if (-not (Test-Path -Path "user_data")) {
-            New-Item -ItemType Directory -Path "user_data" -Force
-        }
+        node -e "
+          const fs = require('fs');
+          const path = require('path');
+          const os = require('os');
 
-        # 2. Danh sách các đường dẫn chứa state.json local
-        $possiblePaths = @(
-            "E:\Work\Moonstake\user_data\state.json",
-            "D:\Work\Moonstake\user_data\state.json",
-            "$HOME\Work\Moonstake\user_data\state.json"
-        )
+          const target = path.join(process.cwd(), 'user_data', 'state.json');
+          if (fs.existsSync(target)) {
+            console.log('state.json already exists in workspace:', target);
+            process.exit(0);
+          }
 
-        $found = $false
-        foreach ($path in $possiblePaths) {
-            Write-Host "Checking path: $path"
-            if (Test-Path -Path $path) {
-                Copy-Item -Path $path -Destination "user_data\state.json" -Force
-                Write-Host "Successfully copied state.json from $path"
-                $found = $true
-                break
+          const candidates = [
+            path.join(os.homedir(), 'Desktop', 'Work', 'Moonstake', 'Moonstake', 'user_data', 'state.json'),
+            path.join(os.homedir(), 'Desktop', 'Work', 'Moonstake', 'user_data', 'state.json'),
+            path.join(os.homedir(), 'Work', 'Moonstake', 'Moonstake', 'user_data', 'state.json'),
+            path.join(os.homedir(), 'Work', 'Moonstake', 'user_data', 'state.json'),
+            'E:\\\\Work\\\\Moonstake\\\\user_data\\\\state.json',
+            'D:\\\\Work\\\\Moonstake\\\\user_data\\\\state.json'
+          ];
+
+          let found = false;
+          for (const p of candidates) {
+            if (fs.existsSync(p)) {
+              console.log('Successfully found and copied state.json from:', p);
+              fs.mkdirSync(path.dirname(target), { recursive: true });
+              fs.copyFileSync(p, target);
+              found = true;
+              break;
             }
-        }
+          }
 
-        if (-not $found) {
-            Write-Error "CRITICAL: state.json was not found in any local path! Please place state.json at E:\Work\Moonstake\user_data\state.json"
-            exit 1
-        }
+          if (!found) {
+            console.error('CRITICAL: state.json was not found in any local candidate path!');
+            process.exit(1);
+          }
+        "
 
     - name: Run Playwright Tests
-      shell: cmd
-      run: npx playwright test tests/asset.spec.ts
+      run: npx playwright test tests/balance-onchain.spec.ts
+      env:
+        CI: true
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
 
-      
+    - name: Upload Playwright Report
+      uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: playwright-report
+        path: playwright-report/
+        retention-days: 14
