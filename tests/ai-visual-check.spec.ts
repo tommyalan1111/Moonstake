@@ -1,39 +1,64 @@
-import { test, expect } from '@playwright/test';
-import { analyzeImageWithGemini, askGemini } from '../utils/gemini';
+import { test, expect, chromium, BrowserContext, Page } from '@playwright/test';
+import { GoogleGenAI } from '@google/genai';
+import path from 'path';
 
-test.describe('Gemini AI Powered Testing', () => {
+const apiKey = process.env.GEMINI_API_KEY || '';
+const ai = new GoogleGenAI({ apiKey });
 
-  test('1. Hỏi Gemini trợ giúp trực tiếp trong Test Case', async () => {
-    const prompt = 'Hãy liệt kê 3 lợi ích ngắn gọn của việc kết hợp AI vào Automation Testing.';
-    const aiAnswer = await askGemini(prompt);
-    
-    console.log('\n🤖 [Gemini Answer]:\n', aiAnswer);
-    expect(aiAnswer).toBeTruthy();
-  });
+/**
+ * Hàm hỗ trợ Retry khi API trả về lỗi 503 / 429
+ */
+async function callGeminiWithRetry(fn: () => Promise<any>, retries = 3, delayMs = 2000): Promise<any> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      if (attempt === retries) throw error;
+      console.warn(`⚠️ Gọi Gemini API thất bại (Lần ${attempt}/${retries}). Thử lại sau ${delayMs / 1000}s...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
 
-  test('2. Chụp màn hình và nhờ Gemini phân tích UI', async ({ page }) => {
-    // Chuyển đến trang Assets List
-    await page.goto('/admin/assets-list');
-    await page.waitForTimeout(3000);
+export async function askGemini(prompt: string): Promise<string> {
+  if (!apiKey) {
+    throw new Error('❌ Khuyết GEMINI_API_KEY. Vui lòng thêm GEMINI_API_KEY vào file .env');
+  }
 
-    // 1. Chụp ảnh màn hình toàn trang
-    const screenshotBuffer = await page.screenshot({ fullPage: true });
+  const response = await callGeminiWithRetry(() =>
+    ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    })
+  );
 
-    // 2. Gửi ảnh + prompt cho Gemini
-    console.log('📸 Đang gửi screenshot cho Gemini AI kiểm tra UI...');
-    
-    const prompt = `
-      Bạn là một QA Automation Senior. Hãy kiểm tra hình ảnh màn hình này và trả lời các câu hỏi:
-      1. Màn hình này hiển thị danh sách các tài sản (Assets) nào?
-      2. Có phát hiện lỗi hiển thị, vỡ layout, hoặc văn bản bị tràn/chồng chéo lên nhau không?
-      Trả lời ngắn gọn, súc tích theo dạng danh sách.
-    `;
+  return response.text || '';
+}
 
-    const aiAnalysis = await analyzeImageWithGemini(screenshotBuffer, prompt);
+export async function analyzeImageWithGemini(
+  imageBuffer: Buffer,
+  prompt: string
+): Promise<string> {
+  if (!apiKey) {
+    throw new Error('❌ Khuyết GEMINI_API_KEY. Vui lòng thêm GEMINI_API_KEY vào file .env');
+  }
 
-    console.log('\n--- KẾT QUẢ ĐÁNH GIÁ TỪ GEMINI AI ---');
-    console.log(aiAnalysis);
-    console.log('-------------------------------------\n');
-  });
+  const base64Image = imageBuffer.toString('base64');
 
-});
+  const response = await callGeminiWithRetry(() =>
+    ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        prompt,
+        {
+          inlineData: {
+            mimeType: 'image/png',
+            data: base64Image,
+          },
+        },
+      ],
+    })
+  );
+
+  return response.text || '';
+}

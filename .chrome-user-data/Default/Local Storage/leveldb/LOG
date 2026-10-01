@@ -1,13 +1,12 @@
-2026/09/30-17:52:13.795 b66e7dc Reusing MANIFEST /Users/Amuro/Desktop/Work/Moonstake/Moonstake/.chrome-user-data/Default/Local Storage/leveldb/MANIFEST-000001
-2026/09/30-17:52:13.796 b66e7dc Recovering log #23
-2026/09/30-17:52:13.797 b66e7dc Level-0 table #26: started
-2026/09/30-17:52:13.806 b66e7dc Level-0 table #26: 44482 bytes OK
-2026/09/30-17:52:13.806 b66e7dc Recovering log #25
-2026/09/30-17:52:13.807 b66e7dc Reusing old log /Users/Amuro/Desktop/Work/Moonstake/Moonstake/.chrome-user-data/Default/Local Storage/leveldb/000025.log 
-2026/09/30-17:52:13.809 b66e7dc Delete type=0 #23
-2026/09/30-17:52:28.078 b66e7df Level-0 table #28: started
-2026/09/30-17:52:28.080 b66e7e2 Current memtable full; waiting...
-2026/09/30-17:52:28.081 b66e7df Level-0 table #28: 27194 bytes OK
-2026/09/30-17:52:28.096 b66e7df Delete type=0 #25
-2026/09/30-17:52:28.107 b66e7dc Level-0 table #30: started
-2026/09/30-17:52:28.109 b66e7dc Level-0 table #30: 44245 bytes OK
+2026/10/01-10:44:03.932 b72e1c0 Reusing MANIFEST /Users/Amuro/Desktop/Work/Moonstake/Moonstake/.chrome-user-data/Default/Local Storage/leveldb/MANIFEST-000001
+2026/10/01-10:44:03.933 b72e1c0 Recovering log #245
+2026/10/01-10:44:03.933 b72e1c0 Level-0 table #249: started
+2026/10/01-10:44:03.939 b72e1c0 Level-0 table #249: 17018 bytes OK
+2026/10/01-10:44:03.939 b72e1c0 Recovering log #248
+2026/10/01-10:44:03.941 b72e1c0 Reusing old log /Users/Amuro/Desktop/Work/Moonstake/Moonstake/.chrome-user-data/Default/Local Storage/leveldb/000248.log 
+2026/10/01-10:44:03.942 b72e1c0 Delete type=0 #245
+2026/10/01-10:44:22.491 b72e1c3 Level-0 table #251: started
+2026/10/01-10:44:22.493 b72e1c0 Current memtable full; waiting...
+2026/10/01-10:44:22.511 b72e1c3 Level-0 table #251: 17036 bytes OK
+2026/10/01-10:44:22.518 b72e1c3 Delete type=0 #248
+2026/10/01-10:44:22.518 b72e1c3 Level-0 table #253: started
