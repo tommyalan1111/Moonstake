@@ -30,3 +30,7 @@ test-results/
 .env.*
 !.env.example
 playwright/.auth/
+
+# Bỏ qua thư mục actions-runner để không push lên git
+/actions-runner/
+
