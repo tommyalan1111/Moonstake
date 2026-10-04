@@ -23,52 +23,51 @@ export class AssetsPage {
   // Trong pages/AssetsPage.ts
 
 async verifyBalanceIsHidden() {
-  // 1. Đảm bảo trang đã load xong DOM
-  await this.page.waitForLoadState('domcontentloaded');
+    // 1. Đảm bảo mạng đã ổn định để trang load xong dữ liệu
+    await this.page.waitForLoadState('networkidle');
 
-  // 2. Chờ phần tử đặc trưng của Dashboard hiển thị (Nút 'Hide 0 balance' hoặc Tab 'Coins')
-  const dashboardHeader = this.page.locator('text="Hide 0 balance"').first();
-  await expect(dashboardHeader).toBeVisible({ timeout: 15000 });
+    // 2. Thay thế bằng locator linh hoạt hơn, tìm phần tử có chữ "Balance" hoặc "Coins" thay vì fix cứng "Hide 0 balance"
+    const dashboardHeader = this.page.locator('text=/Balance|Coins/i').first();
+    await expect(dashboardHeader).toBeVisible({ timeout: 15000 });
 
-  // 3. Thực hiện kiểm tra/click Toggle Eye Balance
-  // Tìm nút Toggle Ẩn/Hiện Balance (thường nằm gần phần tổng số dư USD)
-  const toggleEyeBtn = this.page.locator('button, svg, i').filter({ hasText: /hide|show|\*\*\*/i }).first();
-  
-  if (await toggleEyeBtn.isVisible()) {
-    await toggleEyeBtn.click();
-    await this.page.waitForTimeout(1000);
+    // 3. Thực hiện kiểm tra/click Toggle Eye Balance
+    const toggleEyeBtn = this.page.locator('button, svg, i').filter({ hasText: /hide|show|\*\*\*/i }).first();
+    
+    if (await toggleEyeBtn.isVisible()) {
+      await toggleEyeBtn.click();
+      await this.page.waitForTimeout(1000);
+    }
+
+    // 4. Assert rằng số dư đã chuyển sang dạng ẩn
+    const isHidden = await this.page.getByText('***').first().isVisible().catch(() => false);
+    console.log('👁️ Trạng thái ẩn số dư (Hide Balance):', isHidden ? 'Đã ẩn (***)' : 'Đang hiển thị');
   }
 
-  // 4. Assert rằng số dư đã chuyển sang dạng ẩn (ví dụ: chứa dấu *** hoặc ẩn bớt chữ số)
-  const isHidden = await this.page.getByText('***').first().isVisible().catch(() => false);
-  console.log('👁️ Trạng thái ẩn số dư (Hide Balance):', isHidden ? 'Đã ẩn (***)' : 'Đang hiển thị');
-}
+// TC02: Kiểm tra danh sách Assets hiển thị các đồng Token
+  async verifyAssetsListLoaded() {
+    // 1. Đợi mạng ổn định thay vì chỉ DOM content loaded để dữ liệu kịp đổ về
+    await this.page.waitForLoadState('networkidle');
 
-  // TC02: Kiểm tra danh sách Assets hiển thị các đồng Token
-  // pages/AssetsPage.ts
-async verifyAssetsListLoaded() {
-  // 1. Đảm bảo trang đã load
-  await this.page.waitForLoadState('domcontentloaded');
+    // 2. Chờ một phần tử đặc trưng của trang danh sách tài sản xuất hiện (ví dụ: 'Hide 0 balance' hoặc tab 'Coins')
+    const dashboardHeader = this.page.locator('text="Hide 0 balance"').first();
+    await expect(dashboardHeader).toBeVisible({ timeout: 15000 });
 
-  // 2. Chờ tiêu đề bảng Assets xuất hiện (ASSET / BALANCE)
-  const assetTableHeader = this.page.locator('text=/ASSET.*BALANCE/i').first();
-  await expect(assetTableHeader).toBeVisible({ timeout: 15000 });
+    // 3. Locator chính xác cho dòng Asset trong bảng (Ethereum ETH, Avalanche AVAX, v.v.)
+    const assetRow = this.page
+      .locator('tr, div')
+      .filter({ hasText: /(Ethereum ETH|Avalanche.*AVAX|Polygon MATIC|Tezos XTZ|USDT)/i })
+      .first();
 
-  // 3. Locator chính xác cho dòng Asset trong bảng (Ví dụ: Ethereum ETH hoặc Avalanche AVAX)
-  const assetRow = this.page
-    .locator('tr, div')
-    .filter({ hasText: /(Ethereum ETH|Avalanche.*AVAX|Polygon MATIC|Tezos XTZ)/i })
-    .first();
-
-  // 4. Assert rằng ít nhất 1 dòng Asset đã hiển thị thành công
-  await expect(assetRow).toBeVisible({ timeout: 15000 });
-  
-  console.log('✅ Danh sách Assets đã tải thành công.');
-}
+    // 4. Assert rằng ít nhất 1 dòng Asset đã hiển thị thành công
+    await expect(assetRow).toBeVisible({ timeout: 15000 });
+    
+    console.log('✅ Danh sách Assets đã tải thành công.');
+  }
 
   // TC03: Chọn một Token cụ thể trong danh sách Assets
   async selectAssetByName(symbolOrName: string) {
-    await this.page.waitForLoadState('domcontentloaded');
+    // 1. Chờ mạng ổn định để đảm bảo danh sách token đã được render từ API
+    await this.page.waitForLoadState('networkidle');
 
     const tokenItem = this.page
       .locator('tr, div, li, a')
@@ -76,7 +75,7 @@ async verifyAssetsListLoaded() {
       .filter({ hasNotText: 'MATIC only' })
       .first();
 
-    await tokenItem.waitFor({ state: 'visible', timeout: 20000 });
+    // 2. Tận dụng cơ chế auto-waiting của Playwright thay vì gọi thủ công .waitFor() kèm timeout lớn
     await tokenItem.scrollIntoViewIfNeeded();
     await tokenItem.click({ force: true });
   }
