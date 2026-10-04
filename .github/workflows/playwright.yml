@@ -21,33 +21,30 @@ jobs:
     - name: Install Dependencies
       run: npm install
 
-    # Khởi tạo thư mục user_data & Copy state.json linh hoạt theo môi trường Runner (macOS, Windows, Linux)
-    - name: Ensure user_data and Copy State
+    - name: Ensure Auth State Directory and Copy user.json
       run: |
         node -e "
           const fs = require('fs');
           const path = require('path');
           const os = require('os');
 
-          const target = path.join(process.cwd(), 'user_data', 'state.json');
+          const target = path.join(process.cwd(), 'playwright', '.auth', 'user.json');
           if (fs.existsSync(target)) {
-            console.log('state.json already exists in workspace:', target);
+            console.log('user.json already exists in workspace:', target);
             process.exit(0);
           }
 
           const candidates = [
-            path.join(os.homedir(), 'Desktop', 'Work', 'Moonstake', 'Moonstake', 'user_data', 'state.json'),
-            path.join(os.homedir(), 'Desktop', 'Work', 'Moonstake', 'user_data', 'state.json'),
-            path.join(os.homedir(), 'Work', 'Moonstake', 'Moonstake', 'user_data', 'state.json'),
-            path.join(os.homedir(), 'Work', 'Moonstake', 'user_data', 'state.json'),
-            'E:\\\\Work\\\\Moonstake\\\\user_data\\\\state.json',
-            'D:\\\\Work\\\\Moonstake\\\\user_data\\\\state.json'
+            path.join(os.homedir(), 'Desktop', 'Work', 'Moonstake', 'Moonstake', 'playwright', '.auth', 'user.json'),
+            path.join(os.homedir(), 'Work', 'Moonstake', 'Moonstake', 'playwright', '.auth', 'user.json'),
+            'E:\\\\Work\\\\Moonstake\\\\playwright\\\\.auth\\\\user.json',
+            'D:\\\\Work\\\\Moonstake\\\\playwright\\\\.auth\\\\user.json'
           ];
 
           let found = false;
           for (const p of candidates) {
             if (fs.existsSync(p)) {
-              console.log('Successfully found and copied state.json from:', p);
+              console.log('Successfully found and copied user.json from:', p);
               fs.mkdirSync(path.dirname(target), { recursive: true });
               fs.copyFileSync(p, target);
               found = true;
@@ -56,7 +53,7 @@ jobs:
           }
 
           if (!found) {
-            console.error('CRITICAL: state.json was not found in any local candidate path!');
+            console.error('CRITICAL: user.json was not found in any local candidate path!');
             process.exit(1);
           }
         "
