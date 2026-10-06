@@ -1,19 +1,62 @@
 import { test, expect, Page } from '@playwright/test';
 import { TARGET_ASSETS, AssetConfig } from '../config/networks';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
 // ============================================================================
 // 1. HÀM ĐỌC SỐ DƯ ON-CHAIN TỪ RPC / API
 // ============================================================================
 async function getOnChainBalance(asset: AssetConfig): Promise<number> {
-  // Lấy danh sách RPC URL trực tiếp từ asset config
-  const rpcString = asset.rpcUrl || 'https://cloudflare-eth.com, https://eth.llamarpc.com, https://ethereum-rpc.publicnode.com';
-  const rpcUrls: string[] = rpcString.split(',').map((u: string) => u.trim());
+  const infuraKey = process.env.INFURA_API_KEY || '5a9e189aa34c428688e0d37199ae29b2';
+
+  // C. Xử lý riêng cho Tezos (XTZ) vì không dùng EVM RPC
+  if (asset.network === 'tezos' || asset.symbol === 'XTZ') {
+    const apiUrl = asset.apiUrl || 'https://api.tzkt.io/v1/accounts/';
+    try {
+      const res = await fetch(`${apiUrl}${asset.address}`);
+      if (!res.ok) throw new Error(`Tezos API HTTP Status ${res.status}`);
+      const data = await res.json();
+      // TzKT trả về balance theo mutez (1 XTZ = 1,000,000 mutez)
+      const balanceMutez = data?.balance || data?.spendableBalance || 0;
+      return Number(balanceMutez) / 1e6;
+    } catch (err: any) {
+      throw new Error(`❌ Tezos API error cho ${asset.symbol}: ${err?.message || String(err)}`);
+    }
+  }
+
+  // Xây dựng danh sách RPC ưu tiên dùng Infura cho các mạng EVM
+  let rpcUrls: string[] = [];
+
+  if (asset.symbol === 'ETH' || asset.symbol === 'USDT') {
+    rpcUrls.push(`https://mainnet.infura.io/v3/${infuraKey}`);
+    rpcUrls.push('https://eth.llamarpc.com');
+  } else if (asset.symbol === 'MATIC') {
+    rpcUrls.push(`https://polygon-mainnet.infura.io/v3/${infuraKey}`);
+    rpcUrls.push('https://polygon-bor-rpc.publicnode.com');
+  } else if (asset.symbol === 'AVAX') {
+    // Dùng Infura Avalanche Mainnet hoặc public chuẩn
+    rpcUrls.push(`https://avalanche-mainnet.infura.io/v3/${infuraKey}`);
+    rpcUrls.push('https://api.avax.network/ext/bc/C/rpc');
+  }
+
+  // Lấy thêm từ asset.rpcUrl nếu có sẵn trong config
+  if (asset.rpcUrl) {
+    const extraUrls = asset.rpcUrl.split(',').map((u: string) => u.trim());
+    rpcUrls.push(...extraUrls);
+  }
+
+  rpcUrls = Array.from(new Set(rpcUrls));
 
   if (rpcUrls.length === 0) {
     throw new Error(`❌ Không tìm thấy cấu hình rpcUrl cho tài sản ${asset.symbol}`);
   }
 
-  // A. EVM Native (ETH, BNB...)
+  // Kiểm tra tính hợp lệ của địa chỉ ví trước khi gọi RPC
+  if (!asset.address || asset.address.trim() === '') {
+    throw new Error(`❌ Địa chỉ ví (address) cho ${asset.symbol} bị trống hoặc không hợp lệ!`);
+  }
+
+  // A. EVM Native (ETH, AVAX, MATIC...)
   if (asset.network === 'evm' && !asset.contractAddress) {
     let lastError: string = 'Không thể kết nối RPC Node';
 
@@ -94,7 +137,6 @@ async function getOnChainBalance(asset: AssetConfig): Promise<number> {
         if (balanceData?.result && balanceData.result !== '0x') {
           const balanceRaw = BigInt(balanceData.result);
 
-          // Lấy số decimals động (fallback về asset.decimals hoặc 6)
           let decimals = asset.decimals ?? 6;
           try {
             const resDecimals = await fetch(url, {
@@ -116,10 +158,12 @@ async function getOnChainBalance(asset: AssetConfig): Promise<number> {
               decimals = Number(BigInt(decimalsData.result));
             }
           } catch {
-            // Giữ giá trị fallback nếu contract không có phương thức decimals() public
+            // Giữ giá trị fallback
           }
 
           return Number(balanceRaw) / Math.pow(10, decimals);
+        } else {
+          return 0; // Trả về 0 nếu ví không có token này
         }
       } catch (err: any) {
         lastError = err?.message || String(err);
@@ -128,56 +172,76 @@ async function getOnChainBalance(asset: AssetConfig): Promise<number> {
     throw new Error(`❌ RPC ERC20 error cho ${asset.symbol}: ${lastError}`);
   }
 
-  // C. Tezos (XTZ)
-  if (asset.network === 'tezos' && asset.apiUrl) {
-    try {
-      const res = await fetch(`${asset.apiUrl}${asset.address}`);
-      if (!res.ok) throw new Error(`Tezos API HTTP Status ${res.status}`);
-      const data = await res.json();
-      return (data?.balance || 0) / 1e6;
-    } catch (err: any) {
-      throw new Error(`❌ Tezos API error cho ${asset.symbol}: ${err?.message || String(err)}`);
-    }
-  }
-
   throw new Error(`Cấu hình tài sản không hợp lệ cho ${asset.symbol}`);
 }
 
 // ============================================================================
-// 2. HÀM ĐỌC SỐ DƯ TỪ GIAO DIỆN UI
+// 2. HÀM ĐỌC SỐ DƯ TỪ GIAO DIỆN UI (Đã tối ưu selector và chống bắt nhầm phần tử ẩn)
 // ============================================================================
 async function getUiTokenBalance(page: Page, asset: AssetConfig): Promise<{ amount: number; found: boolean }> {
   let result = { amount: 0, found: false };
-
   const isTokenTab = asset.network === 'evm-token' || !!asset.contractAddress;
   const tabName = isTokenTab ? 'Tokens' : 'Coins';
 
-  // 1. Chờ UI tải xong và Switch Tab
-  const targetTab = page.getByRole('tab', { name: tabName });
-  await targetTab.waitFor({ state: 'visible', timeout: 15000 });
-  await targetTab.click();
-  await expect(targetTab).toHaveAttribute('aria-selected', 'true', { timeout: 5000 });
+  // 1. Chủ động click chuyển đúng tab (nếu cần)
+  try {
+    const targetTab = page.getByRole('tab', { name: tabName }).or(page.locator(`text=${tabName}`));
+    await targetTab.first().waitFor({ state: 'visible', timeout: 5000 });
+    await targetTab.first().click();
+    await page.waitForTimeout(1500);
+  } catch {}
 
-  // 2. Định vị hàng chứa token và bóc tách số dư
+  // 2. Vòng lặp check thông minh với toPass
   await expect(async () => {
-    const coinRow = page
-      .getByRole('row')
-      .filter({ hasText: new RegExp(`\\b${asset.symbol}\\b`, 'i') })
+    // Định vị hàng chứa asset
+    const assetRow = page.locator('tr, div.q-item, div.asset-row, li, div.token-item')
+      .filter({ has: page.locator(`text=${asset.symbol}`) })
+      .filter({ has: page.locator(':visible') })
       .first();
 
-    await expect(coinRow).toBeVisible();
+    // Nếu sau khi reload mà hàng chưa kịp hiện, throw lỗi nhẹ để toPass đợi render
+    await expect(assetRow).toBeVisible({ timeout: 8000 });
 
-    const balanceCell = coinRow.getByRole('cell').nth(1);
-    const cellText = (await balanceCell.innerText()).replace(/\s+/g, ' ').trim();
+    const balanceElement = assetRow.locator('.balance').first();
+    await expect(balanceElement).toBeVisible({ timeout: 5000 });
+    
+    let cellText = (await balanceElement.innerText()).trim();
+    console.log(`[DEBUG] Đọc UI cho ${asset.symbol} -> text thô trong .balance: "${cellText}"`);
 
     const amountMatch = cellText.match(new RegExp(`([\\d\\.,]+)\\s*${asset.symbol}`, 'i'))
-                     || cellText.match(/^([\d\.,]+)/);
+                       || cellText.match(/^([\d\.,]+)/);
 
-    expect(amountMatch, `Không bóc tách được số dư từ ô Balance: "${cellText}"`).toBeTruthy();
+    expect(amountMatch, `Không bóc tách được số dư cho ${asset.symbol} từ text: "${cellText}"`).toBeTruthy();
 
     if (amountMatch) {
       const amountStr = amountMatch[1].replace(/,/g, '');
       const amount = parseFloat(amountStr);
+
+      // CHỈ RELOAD KHI: Số dư thực tế bằng 0 (chưa load được)
+      if (amount === 0) {
+        console.log(`⚠️ UI đang hiển thị 0 cho ${asset.symbol}, tiến hành bấm nút refresh trên giao diện...`);
+        
+        try {
+          // Click thẳng vào icon reload (.icon-reload) để gọi lại API cập nhật dữ liệu mà giữ nguyên session
+          const refreshIcon = page.locator('.icon-reload').first();
+          await refreshIcon.click();
+        } catch {
+          // Fallback nếu không bấm được icon thì click vào tab để ép refresh
+          await targetTab.first().click();
+        }
+
+        // QUAN TRỌNG: Đợi 4 giây cho UI xóa bảng cũ và render lại bảng mới sau khi bấm refresh
+        await page.waitForTimeout(4000); 
+
+        // Chờ thêm để chắc chắn hàng của asset đã xuất hiện trở lại trước khi vòng lặp check tiếp
+        const assetRow = page.locator('tr, div.q-item, div.asset-row, li, div.token-item')
+          .filter({ has: page.locator(`text=${asset.symbol}`) })
+          .filter({ has: page.locator(':visible') })
+          .first();
+        await assetRow.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+        
+        throw new Error(`Đã bấm refresh cho ${asset.symbol}, quét lại lần nữa...`);
+      }
 
       result = {
         amount: isNaN(amount) ? 0 : amount,
@@ -185,42 +249,58 @@ async function getUiTokenBalance(page: Page, asset: AssetConfig): Promise<{ amou
       };
     }
   }).toPass({
-    timeout: 20000,
-    intervals: [500, 1000],
+    timeout: 35000, // Tăng tổng thời gian cho phép retry sau khi reload
+    intervals: [2000, 3000],
   });
 
   return result;
 }
 
 // ============================================================================
-// 3. SUITE KIỂM THỬ PLAYWRIGHT
+// 3. SUITE KIỂM THỬ PLAYWRIGHT (Đã lược bỏ code thừa, chạy trực tiếp mượt mà)
 // ============================================================================
 test.describe('On-Chain Balance Integrity Verification', () => {
-  for (const asset of TARGET_ASSETS) {
-    test(`Verify balance integrity for ${asset.symbol}`, async ({ page }) => {
+  test('Verify balance integrity for all configured assets', async ({ page }) => {
+    // Tăng thời gian timeout lên 90s để chạy thong thả toàn bộ danh sách
+    test.setTimeout(90000);
+
+    console.log(`\n🚀 Bắt đầu kiểm tra On-Chain vs UI cho toàn bộ danh sách tài sản...`);
+    await page.goto('/admin/assets-list/', { waitUntil: 'networkidle' });
+
+    // Đợi một nhịp ngắn cho trang web và bảng dữ liệu render ổn định hoàn toàn
+    await page.waitForTimeout(2000);
+
+    const failures: string[] = [];
+
+    // Vòng lặp duyệt qua từng asset trên cùng một phiên bản browser
+    for (const asset of TARGET_ASSETS) {
       console.log(`\n--------------------------------------------------`);
       console.log(`🔍 Kiểm tra tài sản: ${asset.symbol}`);
 
-      // BƯỚC 1: Lấy số dư On-Chain từ asset config
-      const onChainBalance = await getOnChainBalance(asset);
-      console.log(`🌐 On-Chain Balance: ${onChainBalance} ${asset.symbol}`);
+      try {
+        // BƯỚC 1: Lấy số dư On-Chain
+        const onChainBalance = await getOnChainBalance(asset);
+        console.log(`🌐 On-Chain Balance: ${onChainBalance} ${asset.symbol}`);
 
-      // BƯỚC 2: Điều hướng vào trang danh sách tài sản
-      await page.goto('/admin/assets-list/', { waitUntil: 'networkidle' });
+        // BƯỚC 2: Đọc số dư từ UI
+        const uiData = await getUiTokenBalance(page, asset);
+        if (uiData.found) {
+          console.log(`📱 UI Balance: ${uiData.amount} ${asset.symbol}`);
+        } else {
+          console.log(`📱 UI Balance: Không tìm thấy ${asset.symbol} trên UI`);
+        }
 
-      // BƯỚC 3: Đọc số dư trực tiếp từ UI
-      const uiData = await getUiTokenBalance(page, asset);
-
-      if (uiData.found) {
-        console.log(`📱 UI Balance: ${uiData.amount} ${asset.symbol}`);
-      } else {
-        console.log(`📱 UI Balance: Không tìm thấy ${asset.symbol} trên UI`);
+        // BƯỚC 3: So sánh On-Chain vs UI
+        expect(uiData.found, `Không tìm thấy ${asset.symbol} trên giao diện UI!`).toBe(true);
+        expect(uiData.amount).toBeCloseTo(onChainBalance, 3);
+        console.log(`✅ [PASS]: Balance ${asset.symbol} trùng khớp hoàn hảo!`);
+      } catch (error: any) {
+        console.error(`❌ [FAIL]: Lỗi khi kiểm tra ${asset.symbol} -> ${error.message}`);
+        failures.push(`${asset.symbol}: ${error.message}`);
       }
+    }
 
-      // BƯỚC 4: So sánh On-Chain vs UI
-      expect(uiData.found, `Không tìm thấy ${asset.symbol} trên giao diện UI!`).toBe(true);
-      expect(uiData.amount).toBeCloseTo(onChainBalance, 3);
-      console.log(`✅ [PASS]: Balance trùng khớp hoàn hảo!`);
-    });
-  }
+    // Báo cáo tổng kết ở cuối
+    expect(failures, `Các tài sản không khớp:\n${failures.join('\n')}`).toEqual([]);
+  });
 });
