@@ -257,7 +257,7 @@ async function getUiTokenBalance(page: Page, asset: AssetConfig): Promise<{ amou
 }
 
 // ============================================================================
-// 3. SUITE KIỂM THỬ PLAYWRIGHT (Đã lược bỏ code thừa, chạy trực tiếp mượt mà)
+// 3. SUITE KIỂM THỬ PLAYWRIGHT (Đã tích hợp bảng Test Report chuyên nghiệp)
 // ============================================================================
 test.describe('On-Chain Balance Integrity Verification', () => {
   test('Verify balance integrity for all configured assets', async ({ page }) => {
@@ -271,11 +271,23 @@ test.describe('On-Chain Balance Integrity Verification', () => {
     await page.waitForTimeout(2000);
 
     const failures: string[] = [];
+    
+    // Khai báo mảng lưu kết quả để xuất ra bảng report ở cuối
+    const reportResults: Array<{
+      asset: string;
+      steps: string;
+      expected: string;
+      actual: string;
+      status: 'PASS' | 'FAIL';
+    }> = [];
 
     // Vòng lặp duyệt qua từng asset trên cùng một phiên bản browser
     for (const asset of TARGET_ASSETS) {
       console.log(`\n--------------------------------------------------`);
       console.log(`🔍 Kiểm tra tài sản: ${asset.symbol}`);
+
+      const testSteps = "1. Lấy số dư On-Chain<br>2. Đọc số dư từ UI<br>3. So sánh On-Chain vs UI";
+      const expectedResult = `On-Chain khớp hoàn hảo với UI (sai số cho phép < 10^-3)`;
 
       try {
         // BƯỚC 1: Lấy số dư On-Chain
@@ -294,13 +306,46 @@ test.describe('On-Chain Balance Integrity Verification', () => {
         expect(uiData.found, `Không tìm thấy ${asset.symbol} trên giao diện UI!`).toBe(true);
         expect(uiData.amount).toBeCloseTo(onChainBalance, 3);
         console.log(`✅ [PASS]: Balance ${asset.symbol} trùng khớp hoàn hảo!`);
+
+        // Ghi nhận kết quả PASS
+        reportResults.push({
+          asset: asset.symbol,
+          steps: testSteps,
+          expected: expectedResult,
+          actual: `On-Chain: ${onChainBalance} | UI: ${uiData.amount}`,
+          status: 'PASS'
+        });
+
       } catch (error: any) {
         console.error(`❌ [FAIL]: Lỗi khi kiểm tra ${asset.symbol} -> ${error.message}`);
         failures.push(`${asset.symbol}: ${error.message}`);
+
+        // Ghi nhận kết quả FAIL
+        reportResults.push({
+          asset: asset.symbol,
+          steps: testSteps,
+          expected: expectedResult,
+          actual: `Lỗi: ${error.message}`,
+          status: 'FAIL'
+        });
       }
     }
 
-    // Báo cáo tổng kết ở cuối
+    // ============================================================================
+    // IN BẢNG TEST REPORT TỔNG KẾT RA CONSOLE OUTPUT
+    // ============================================================================
+    console.log('\n================================================================================');
+    console.log('📊 TEST EXECUTION REPORT SUMMARY');
+    console.log('================================================================================');
+    console.log('| Test Asset | Test Steps | Expected Result | Actual Result | Status |');
+    console.log('| :--- | :--- | :--- | :--- | :--- |');
+    for (const r of reportResults) {
+      const statusIcon = r.status === 'PASS' ? '✅ **PASS**' : '❌ **FAIL**';
+      console.log(`| **${r.asset}** | ${r.steps} | ${r.expected} | ${r.actual} | ${statusIcon} |`);
+    }
+    console.log('================================================================================\n');
+
+    // Báo cáo tổng kết ở cuối để ép Jenkins fail nếu có test case lỗi
     expect(failures, `Các tài sản không khớp:\n${failures.join('\n')}`).toEqual([]);
   });
 });

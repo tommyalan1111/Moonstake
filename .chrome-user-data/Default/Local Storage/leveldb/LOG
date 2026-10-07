@@ -1,19 +1,22 @@
-2026/10/06-09:46:02.293 2620 Reusing MANIFEST E:\Work\MoonstakeTest\.chrome-user-data\Default\Local Storage\leveldb/MANIFEST-000001
-2026/10/06-09:46:02.294 2620 Recovering log #72
-2026/10/06-09:46:02.295 2620 Level-0 table #75: started
-2026/10/06-09:46:02.300 2620 Level-0 table #75: 19440 bytes OK
-2026/10/06-09:46:02.300 2620 Recovering log #74
-2026/10/06-09:46:02.303 2620 Reusing old log E:\Work\MoonstakeTest\.chrome-user-data\Default\Local Storage\leveldb/000074.log 
-2026/10/06-09:46:02.304 2620 Delete type=0 #72
-2026/10/06-09:46:02.305 6f54 Compacting 5@0 + 1@1 files
-2026/10/06-09:46:02.313 6f54 Generated table #76@0: 17 keys, 19874 bytes
-2026/10/06-09:46:02.313 6f54 Compacted 5@0 + 1@1 files => 19874 bytes
-2026/10/06-09:46:02.313 6f54 compacted to: files[ 0 1 0 0 0 0 0 ]
-2026/10/06-09:46:02.315 6f54 Delete type=2 #65
-2026/10/06-09:46:02.315 6f54 Delete type=2 #67
-2026/10/06-09:46:02.315 6f54 Delete type=2 #69
-2026/10/06-09:46:02.315 6f54 Delete type=2 #71
-2026/10/06-09:46:02.315 6f54 Delete type=2 #73
-2026/10/06-09:46:02.315 6f54 Delete type=2 #75
-2026/10/06-09:46:46.098 2620 Level-0 table #78: started
-2026/10/06-09:46:46.105 2620 Level-0 table #78: 17086 bytes OK
+2026/10/07-16:17:26.468 b978804 Reusing MANIFEST /Users/Amuro/Desktop/Work/Moonstake/Moonstake/.chrome-user-data/Default/Local Storage/leveldb/MANIFEST-000001
+2026/10/07-16:17:26.469 b978804 Recovering log #83
+2026/10/07-16:17:26.469 b978804 Level-0 table #86: started
+2026/10/07-16:17:26.476 b978804 Level-0 table #86: 16952 bytes OK
+2026/10/07-16:17:26.476 b978804 Recovering log #85
+2026/10/07-16:17:26.476 b978804 Reusing old log /Users/Amuro/Desktop/Work/Moonstake/Moonstake/.chrome-user-data/Default/Local Storage/leveldb/000085.log 
+2026/10/07-16:17:26.478 b978804 Delete type=0 #83
+2026/10/07-16:17:26.481 b978807 Compacting 5@0 + 1@1 files
+2026/10/07-16:17:26.484 b978807 Generated table #87@0: 17 keys, 17289 bytes
+2026/10/07-16:17:26.484 b978807 Compacted 5@0 + 1@1 files => 17289 bytes
+2026/10/07-16:17:26.486 b978807 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/10/07-16:17:26.486 b978807 Delete type=2 #76
+2026/10/07-16:17:26.486 b978807 Delete type=2 #80
+2026/10/07-16:17:26.486 b978807 Delete type=2 #82
+2026/10/07-16:17:26.486 b978807 Delete type=2 #86
+2026/10/07-16:17:26.486 b978807 Delete type=2 #78
+2026/10/07-16:17:26.486 b978807 Delete type=2 #84
+2026/10/07-16:17:50.199 b978804 Level-0 table #89: started
+2026/10/07-16:17:50.219 b978807 Current memtable full; waiting...
+2026/10/07-16:17:50.226 b978804 Level-0 table #89: 17127 bytes OK
+2026/10/07-16:17:50.228 b978804 Delete type=0 #85
+2026/10/07-16:17:50.229 b978804 Level-0 table #91: started
